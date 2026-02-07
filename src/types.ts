@@ -2,6 +2,7 @@
 export type ItemCategory =
   | 'skin'
   | 'music_kit'
+  | 'highlight'
   | 'keychain'
   | 'graffiti'
   | 'crate'
@@ -34,7 +35,7 @@ export interface GcItemInput {
    * Raw attribute array from the GC message.
    *
    * Used to extract `music_index` (def_index 166), `graffiti_tint` (def_index 233),
-   * and `keychain_index` (def_index 299) via {@link getAttributeUint32}.
+   * `keychain_index` (def_index 299), and `highlight_index` (def_index 314) via {@link getAttributeUint32}.
    */
   attribute?: {def_index: number; value_bytes?: Buffer}[];
 }

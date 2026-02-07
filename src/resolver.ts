@@ -7,11 +7,12 @@ import {getData} from './data-loader.js';
  * Resolution priority:
  * 1. Skins (by `def_index` + `paint_index`)
  * 2. Music kits (by attribute 166)
- * 3. Keychains (by attribute 299)
- * 4. Graffiti (by `stickers[0].sticker_id` + attribute 233)
- * 5. Crates / cases / keys (by `def_index`)
- * 6. Collectibles (by `def_index`)
- * 7. Stickers / patches (by `stickers[0].sticker_id`)
+ * 3. Highlights / souvenir charms (by attribute 314)
+ * 4. Keychains (by attribute 299)
+ * 5. Graffiti (by `stickers[0].sticker_id` + attribute 233)
+ * 6. Crates / cases / keys (by `def_index`)
+ * 7. Collectibles (by `def_index`)
+ * 8. Stickers / patches (by `stickers[0].sticker_id`)
  *
  * @param gcItem - The raw GC item to resolve.
  * @returns The resolved item data, or `null` if the item could not be identified.
@@ -29,6 +30,7 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
   const defIdx = String(gcItem.def_index);
   const musicIndex = getAttributeUint32(gcItem, 166);
   const graffitiTint = getAttributeUint32(gcItem, 233);
+  const highlightIndex = getAttributeUint32(gcItem, 314);
   const keychainIndex = getAttributeUint32(gcItem, 299);
 
   // 1. Skins: def_index + paint_index
@@ -46,13 +48,19 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
     if (kit) return {name: kit.name, image: kit.image, category: 'music_kit'};
   }
 
-  // 3. Keychains (charms): keychain_index (attribute 299)
+  // 3. Highlights (souvenir charms): highlight_index (attribute 314)
+  if (highlightIndex && highlightIndex > 0) {
+    const highlight = data.highlights[String(highlightIndex)];
+    if (highlight) return {name: highlight.name, image: highlight.image, category: 'highlight'};
+  }
+
+  // 4. Keychains (charms): keychain_index (attribute 299)
   if (keychainIndex && keychainIndex > 0) {
     const keychain = data.keychains[String(keychainIndex)];
     if (keychain) return {name: keychain.name, image: keychain.image, category: 'keychain'};
   }
 
-  // 4. Graffiti: stickers[0].sticker_id + graffiti_tint (attribute 233)
+  // 5. Graffiti: stickers[0].sticker_id + graffiti_tint (attribute 233)
   if (graffitiTint !== undefined && gcItem.stickers?.length) {
     const stickerId = gcItem.stickers[0].sticker_id;
     if (stickerId) {
@@ -65,15 +73,15 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
     }
   }
 
-  // 5. Crates / cases / keys
+  // 6. Crates / cases / keys
   const crate = data.crates[defIdx];
   if (crate) return {name: crate.name, image: crate.image, category: 'crate'};
 
-  // 6. Collectibles (coins, pins, etc.)
+  // 7. Collectibles (coins, pins, etc.)
   const collectible = data.collectibles[defIdx];
   if (collectible) return {name: collectible.name, image: collectible.image, category: 'collectible'};
 
-  // 7. Stickers/patches as items: use stickers[0].sticker_id
+  // 8. Stickers/patches as items: use stickers[0].sticker_id
   if (gcItem.stickers?.length) {
     const stickerId = gcItem.stickers[0].sticker_id;
     if (stickerId) {
