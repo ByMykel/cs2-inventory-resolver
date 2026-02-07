@@ -37,22 +37,3 @@ if (musicIndex) {
   console.log('Music kit ID:', musicIndex);
 }
 ```
-
-Common attribute def_indexes:
-
-
-| def_index | Attribute        |
-| --------- | ---------------- |
-| 166       | `music_index`    |
-| 233       | `graffiti_tint`  |
-| 299       | `keychain_index` |
-
-
-## Types
-
-The package also exports the following types:
-
-- `**GcItemInput**` - The input shape accepted by `resolveItem()`
-- `**ResolvedItemData**` - The object returned by `resolveItem()`
-- `**ItemCategory**` - `'skin' | 'music_kit' | 'keychain' | 'graffiti' | 'crate' | 'collectible' | 'sticker'`
-
