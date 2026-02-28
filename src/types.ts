@@ -21,6 +21,10 @@ export interface ResolvedItemData {
   image: string;
   /** The resolved item entity type. */
   entity: ItemEntity;
+  /** The item's rarity, or `null` if the item has no rarity. */
+  rarity: {id: string; name: string; color: string} | null;
+  /** Whether the item is marketable on the Steam Community Market. */
+  marketable: boolean;
 }
 
 /**
@@ -33,6 +37,10 @@ export interface GcItemInput {
   def_index: number;
   /** The paint/skin index. Non-zero for weapon skins. */
   paint_index?: number;
+  /** The item quality (3 = ★ knife/glove, 9 = StatTrak, 12 = Souvenir). */
+  quality?: number;
+  /** The paint wear float (0.0–1.0). Present only for skins. */
+  paint_wear?: number;
   /** Sticker slots array. Also used for graffiti and sticker/patch items via `sticker_id`. */
   stickers?: {sticker_id?: number}[];
   /**
@@ -48,6 +56,8 @@ export interface GcItemInput {
 export interface ItemEntry {
   name: string;
   image: string;
+  rarity: {id: string; name: string; color: string} | null;
+  marketable: boolean;
 }
 
 /** The full shape of inventory.json from the API. */

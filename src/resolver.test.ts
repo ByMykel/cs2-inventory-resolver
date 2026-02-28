@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {resolveItem, getAttributeUint32} from './resolver.js';
+import {resolveItem, getAttributeUint32, getWearName, hasAttribute, buildSkinName} from './resolver.js';
 import {getData} from './data-loader.js';
 
 /** Build an attribute entry with a uint32 LE-encoded value. */
@@ -56,16 +56,181 @@ describe('getAttributeUint32', () => {
 });
 
 // ---------------------------------------------------------------------------
+// getWearName
+// ---------------------------------------------------------------------------
+describe('getWearName', () => {
+  it('returns Factory New for wear <= 0.07', () => {
+    expect(getWearName(0.05)).toBe('Factory New');
+    expect(getWearName(0.07)).toBe('Factory New');
+  });
+
+  it('returns Minimal Wear for wear <= 0.15', () => {
+    expect(getWearName(0.10)).toBe('Minimal Wear');
+    expect(getWearName(0.15)).toBe('Minimal Wear');
+  });
+
+  it('returns Field-Tested for wear <= 0.38', () => {
+    expect(getWearName(0.30)).toBe('Field-Tested');
+    expect(getWearName(0.38)).toBe('Field-Tested');
+  });
+
+  it('returns Well-Worn for wear <= 0.45', () => {
+    expect(getWearName(0.40)).toBe('Well-Worn');
+    expect(getWearName(0.45)).toBe('Well-Worn');
+  });
+
+  it('returns Battle-Scarred for wear > 0.45', () => {
+    expect(getWearName(0.80)).toBe('Battle-Scarred');
+    expect(getWearName(1.0)).toBe('Battle-Scarred');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasAttribute
+// ---------------------------------------------------------------------------
+describe('hasAttribute', () => {
+  it('returns true when the attribute exists', () => {
+    expect(hasAttribute({attribute: [makeAttr(80, 1)]}, 80)).toBe(true);
+  });
+
+  it('returns false when the attribute does not exist', () => {
+    expect(hasAttribute({attribute: [makeAttr(80, 1)]}, 140)).toBe(false);
+  });
+
+  it('returns false when attribute array is empty', () => {
+    expect(hasAttribute({attribute: []}, 80)).toBe(false);
+  });
+
+  it('returns false when attribute array is missing', () => {
+    expect(hasAttribute({}, 80)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSkinName
+// ---------------------------------------------------------------------------
+describe('buildSkinName', () => {
+  it('returns name with wear for a normal skin', () => {
+    expect(
+      buildSkinName('AK-47 | Redline', {def_index: 7, paint_wear: 0.30}),
+    ).toBe('AK-47 | Redline (Field-Tested)');
+  });
+
+  it('prefixes StatTrak™ for regular skins', () => {
+    expect(
+      buildSkinName('AK-47 | Redline', {
+        def_index: 7,
+        paint_wear: 0.30,
+        attribute: [makeAttr(80, 1)],
+      }),
+    ).toBe('StatTrak™ AK-47 | Redline (Field-Tested)');
+  });
+
+  it('prefixes Souvenir for regular skins', () => {
+    expect(
+      buildSkinName('AK-47 | Redline', {
+        def_index: 7,
+        paint_wear: 0.30,
+        attribute: [makeAttr(140, 1)],
+      }),
+    ).toBe('Souvenir AK-47 | Redline (Field-Tested)');
+  });
+
+  it('knife name keeps ★ from data without duplication', () => {
+    expect(
+      buildSkinName('★ Karambit | Fade', {def_index: 507, quality: 3, paint_wear: 0.01}),
+    ).toBe('★ Karambit | Fade (Factory New)');
+  });
+
+  it('inserts StatTrak™ after ★ for quality 3 knives', () => {
+    expect(
+      buildSkinName('★ Karambit | Fade', {
+        def_index: 507,
+        quality: 3,
+        paint_wear: 0.01,
+        attribute: [makeAttr(80, 1)],
+      }),
+    ).toBe('★ StatTrak™ Karambit | Fade (Factory New)');
+  });
+
+  it('returns name without wear suffix when paint_wear is absent', () => {
+    expect(
+      buildSkinName('AK-47 | Redline', {def_index: 7}),
+    ).toBe('AK-47 | Redline');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // resolveItem — every resolution path
 // ---------------------------------------------------------------------------
 describe('resolveItem', () => {
-  // 1. Skin
-  it('resolves a skin by def_index + paint_index', () => {
-    const result = resolveItem({def_index: 7, paint_index: 282});
+  // 1. Skin — name is decorated
+  it('resolves a skin with decorated name', () => {
+    const result = resolveItem({def_index: 7, paint_index: 282, paint_wear: 0.30});
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('skin');
     expect(result!.name).toContain('AK-47');
+    expect(result!.name).toContain('(Field-Tested)');
     expect(result!.image).toBeTruthy();
+    expect(result!.rarity).toBeDefined();
+    expect(typeof result!.marketable).toBe('boolean');
+  });
+
+  // 1b. Skin — StatTrak
+  it('resolves a StatTrak skin with prefix in name', () => {
+    const result = resolveItem({
+      def_index: 7,
+      paint_index: 282,
+      paint_wear: 0.30,
+      attribute: [makeAttr(80, 1)],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.name).toMatch(/^StatTrak™ .+ \(Field-Tested\)$/);
+  });
+
+  // 1c. Skin — Souvenir
+  it('resolves a Souvenir skin with prefix in name', () => {
+    const result = resolveItem({
+      def_index: 7,
+      paint_index: 282,
+      paint_wear: 0.30,
+      attribute: [makeAttr(140, 1)],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.name).toMatch(/^Souvenir .+ \(Field-Tested\)$/);
+  });
+
+  // 1d. Skin — ★ knife (★ comes from inventory data)
+  it('resolves a knife with ★ already in name from data', () => {
+    const knifeDef = Object.keys(data.skins).find(d => Number(d) >= 500);
+    if (knifeDef) {
+      const paintId = firstKey(data.skins[knifeDef]);
+      const result = resolveItem({
+        def_index: Number(knifeDef),
+        paint_index: paintId,
+        quality: 3,
+        paint_wear: 0.01,
+      });
+      expect(result).not.toBeNull();
+      expect(result!.name).toMatch(/^★ .+ \(Factory New\)$/);
+    }
+  });
+
+  // 1e. Skin — ★ StatTrak knife
+  it('resolves a StatTrak knife as ★ StatTrak™ ...', () => {
+    const knifeDef = Object.keys(data.skins).find(d => Number(d) >= 500);
+    if (knifeDef) {
+      const paintId = firstKey(data.skins[knifeDef]);
+      const result = resolveItem({
+        def_index: Number(knifeDef),
+        paint_index: paintId,
+        quality: 3,
+        paint_wear: 0.01,
+        attribute: [makeAttr(80, 1)],
+      });
+      expect(result).not.toBeNull();
+      expect(result!.name).toMatch(/^★ StatTrak™ .+ \(Factory New\)$/);
+    }
   });
 
   // 2. Music kit
@@ -75,6 +240,7 @@ describe('resolveItem', () => {
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('music_kit');
     expect(result!.name).toBe(data.music_kits[String(kitId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 3. Highlight (souvenir charm)
@@ -84,6 +250,7 @@ describe('resolveItem', () => {
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('highlight');
     expect(result!.name).toBe(data.highlights[String(hlId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 4. Keychain
@@ -93,11 +260,11 @@ describe('resolveItem', () => {
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('keychain');
     expect(result!.name).toBe(data.keychains[String(kcId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 5. Graffiti (tinted)
   it('resolves a tinted graffiti by sticker_id + attribute 233', () => {
-    // Find a tinted graffiti key like "1697_1"
     const tintedKey = Object.keys(data.graffiti).find(k => k.includes('_'))!;
     const [stickerId, tint] = tintedKey.split('_').map(Number);
 
@@ -109,19 +276,20 @@ describe('resolveItem', () => {
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('graffiti');
     expect(result!.name).toBe(data.graffiti[tintedKey].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 6. Graffiti (mono fallback)
   it('falls back to mono graffiti when tinted key is not found', () => {
-    // 1653 is a mono-only graffiti (no tinted variants exist)
     const result = resolveItem({
       def_index: 4000,
       stickers: [{sticker_id: 1653}],
-      attribute: [makeAttr(233, 9999)], // non-existent tint
+      attribute: [makeAttr(233, 9999)],
     });
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('graffiti');
     expect(result!.name).toBe(data.graffiti['1653'].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 7. Key
@@ -131,6 +299,7 @@ describe('resolveItem', () => {
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('key');
     expect(result!.name).toBe(data.keys[String(keyId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 8. Crate
@@ -140,6 +309,7 @@ describe('resolveItem', () => {
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('crate');
     expect(result!.name).toBe(data.crates[String(crateId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 9. Collectible
@@ -149,6 +319,7 @@ describe('resolveItem', () => {
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('collectible');
     expect(result!.name).toBe(data.collectibles[String(colId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 10. Agent
@@ -158,17 +329,17 @@ describe('resolveItem', () => {
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('agent');
     expect(result!.name).toBe(data.agents[String(agentId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 11. Tool
   it('resolves a tool by def_index', () => {
-    // Tool def_indices (1-4) overlap with skins, but without paint_index the
-    // skin path won't match and it falls through to the tool lookup.
     const toolId = firstKey(data.tools);
     const result = resolveItem({def_index: toolId});
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('tool');
     expect(result!.name).toBe(data.tools[String(toolId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 12. Patch
@@ -178,6 +349,7 @@ describe('resolveItem', () => {
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('patch');
     expect(result!.name).toBe(data.patches[String(patchId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
   // 13. Sticker
@@ -187,9 +359,18 @@ describe('resolveItem', () => {
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('sticker');
     expect(result!.name).toBe(data.stickers[String(stickerId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
   });
 
-  // 14. Unknown item → null
+  // 14. Non-skin name is unchanged
+  it('non-skin entities return name unchanged', () => {
+    const crateId = firstKey(data.crates);
+    const result = resolveItem({def_index: crateId});
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe(data.crates[String(crateId)].name);
+  });
+
+  // 15. Unknown item → null
   it('returns null for an unknown def_index', () => {
     expect(resolveItem({def_index: 999999})).toBeNull();
   });
@@ -200,10 +381,6 @@ describe('resolveItem', () => {
 // ---------------------------------------------------------------------------
 describe('resolveItem — priority', () => {
   it('skin takes priority over crate when both match', () => {
-    // Use a def_index that is also a crate key, with a valid paint_index
-    const crateId = firstKey(data.crates);
-    // Craft a fake scenario: even if def_index is a crate, paint_index wins
-    // We use AK-47 (7) which is a valid skin weapon
     const result = resolveItem({def_index: 7, paint_index: 282});
     expect(result!.entity).toBe('skin');
   });
@@ -216,14 +393,12 @@ describe('resolveItem — priority', () => {
   });
 
   it('key takes priority over crate when def_index is in both', () => {
-    // keys and crates don't currently overlap, but key is checked first
     const keyId = firstKey(data.keys);
     const result = resolveItem({def_index: keyId});
     expect(result!.entity).toBe('key');
   });
 
   it('patch takes priority over sticker when sticker_id matches both', () => {
-    // Find a patch sticker_id that is also in stickers (if any)
     const patchKeys = Object.keys(data.patches);
     const overlapping = patchKeys.find(k => data.stickers[k]);
     if (overlapping) {

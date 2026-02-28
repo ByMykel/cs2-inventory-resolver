@@ -1,5 +1,73 @@
-import type {GcItemInput, ResolvedItemData} from './types.js';
+import type {GcItemInput, ItemEntry, ResolvedItemData} from './types.js';
 import {getData} from './data-loader.js';
+
+/**
+ * Return the wear tier name for a given paint wear float.
+ *
+ * @param paintWear - A float between 0.0 and 1.0.
+ */
+export function getWearName(paintWear: number): string {
+  if (paintWear <= 0.07) return 'Factory New';
+  if (paintWear <= 0.15) return 'Minimal Wear';
+  if (paintWear <= 0.38) return 'Field-Tested';
+  if (paintWear <= 0.45) return 'Well-Worn';
+  return 'Battle-Scarred';
+}
+
+/**
+ * Check whether a GC item has a specific attribute by def_index.
+ */
+export function hasAttribute(
+  item: {attribute?: {def_index: number}[]},
+  attrDefIndex: number,
+): boolean {
+  return (item.attribute || []).some(a => a.def_index === attrDefIndex);
+}
+
+/**
+ * Build the full decorated name for a skin.
+ *
+ * The base name from inventory.json already includes `★` for knives/gloves
+ * (quality 3). For StatTrak knives the market name is `★ StatTrak™ Karambit | Fade`,
+ * so we insert the qualifier after `★ ` rather than before it.
+ *
+ * - `StatTrak™ ` if attribute 80 exists.
+ * - `Souvenir ` if attribute 140 exists.
+ * - ` (WearName)` suffix if `paint_wear` is present.
+ */
+export function buildSkinName(name: string, gcItem: GcItemInput): string {
+  let qualifier = '';
+  if (hasAttribute(gcItem, 80)) qualifier = 'StatTrak™ ';
+  else if (hasAttribute(gcItem, 140)) qualifier = 'Souvenir ';
+
+  let decorated: string;
+  if (qualifier && gcItem.quality === 3 && name.startsWith('★ ')) {
+    // Insert qualifier after the ★ prefix: "★ StatTrak™ Karambit | Fade"
+    decorated = `★ ${qualifier}${name.slice(2)}`;
+  } else {
+    decorated = `${qualifier}${name}`;
+  }
+
+  const suffix =
+    gcItem.paint_wear != null ? ` (${getWearName(gcItem.paint_wear)})` : '';
+
+  return `${decorated}${suffix}`;
+}
+
+/** Build a {@link ResolvedItemData} from a matched inventory entry. */
+function makeResult(
+  entry: ItemEntry,
+  gcItem: GcItemInput,
+  entity: ResolvedItemData['entity'],
+): ResolvedItemData {
+  return {
+    name: entity === 'skin' ? buildSkinName(entry.name, gcItem) : entry.name,
+    image: entry.image,
+    entity,
+    rarity: entry.rarity,
+    marketable: entry.marketable,
+  };
+}
 
 /**
  * Resolve a raw GC item into a name, image, and entity.
@@ -43,26 +111,26 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
     const weapon = data.skins[defIdx];
     if (weapon) {
       const skin = weapon[String(gcItem.paint_index)];
-      if (skin) return {name: skin.name, image: skin.image, entity: 'skin'};
+      if (skin) return makeResult(skin, gcItem, 'skin');
     }
   }
 
   // 2. Music kits: music_index (attribute 166)
   if (musicIndex && musicIndex > 0) {
     const kit = data.music_kits[String(musicIndex)];
-    if (kit) return {name: kit.name, image: kit.image, entity: 'music_kit'};
+    if (kit) return makeResult(kit, gcItem, 'music_kit');
   }
 
   // 3. Highlights (souvenir charms): highlight_index (attribute 314)
   if (highlightIndex && highlightIndex > 0) {
     const highlight = data.highlights[String(highlightIndex)];
-    if (highlight) return {name: highlight.name, image: highlight.image, entity: 'highlight'};
+    if (highlight) return makeResult(highlight, gcItem, 'highlight');
   }
 
   // 4. Keychains (charms): keychain_index (attribute 299)
   if (keychainIndex && keychainIndex > 0) {
     const keychain = data.keychains[String(keychainIndex)];
-    if (keychain) return {name: keychain.name, image: keychain.image, entity: 'keychain'};
+    if (keychain) return makeResult(keychain, gcItem, 'keychain');
   }
 
   // 5. Graffiti: stickers[0].sticker_id + graffiti_tint (attribute 233)
@@ -71,43 +139,43 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
     if (stickerId) {
       const tintedKey = `${stickerId}_${graffitiTint}`;
       const tinted = data.graffiti[tintedKey];
-      if (tinted) return {name: tinted.name, image: tinted.image, entity: 'graffiti'};
+      if (tinted) return makeResult(tinted, gcItem, 'graffiti');
 
       const mono = data.graffiti[String(stickerId)];
-      if (mono) return {name: mono.name, image: mono.image, entity: 'graffiti'};
+      if (mono) return makeResult(mono, gcItem, 'graffiti');
     }
   }
 
   // 6. Keys
   const key = data.keys[defIdx];
-  if (key) return {name: key.name, image: key.image, entity: 'key'};
+  if (key) return makeResult(key, gcItem, 'key');
 
   // 7. Crates / cases
   const crate = data.crates[defIdx];
-  if (crate) return {name: crate.name, image: crate.image, entity: 'crate'};
+  if (crate) return makeResult(crate, gcItem, 'crate');
 
   // 8. Collectibles (coins, pins, etc.)
   const collectible = data.collectibles[defIdx];
-  if (collectible) return {name: collectible.name, image: collectible.image, entity: 'collectible'};
+  if (collectible) return makeResult(collectible, gcItem, 'collectible');
 
   // 9. Agents (characters)
   const agent = data.agents[defIdx];
-  if (agent) return {name: agent.name, image: agent.image, entity: 'agent'};
+  if (agent) return makeResult(agent, gcItem, 'agent');
 
   // 10. Tools (Name Tag, Storage Unit, etc.)
   const tool = data.tools[defIdx];
-  if (tool) return {name: tool.name, image: tool.image, entity: 'tool'};
+  if (tool) return makeResult(tool, gcItem, 'tool');
 
   // 11. Patches: use stickers[0].sticker_id (checked before stickers)
   if (gcItem.stickers?.length) {
     const stickerId = gcItem.stickers[0].sticker_id;
     if (stickerId) {
       const patch = data.patches[String(stickerId)];
-      if (patch) return {name: patch.name, image: patch.image, entity: 'patch'};
+      if (patch) return makeResult(patch, gcItem, 'patch');
 
       // 12. Stickers
       const sticker = data.stickers[String(stickerId)];
-      if (sticker) return {name: sticker.name, image: sticker.image, entity: 'sticker'};
+      if (sticker) return makeResult(sticker, gcItem, 'sticker');
 
       // TODO: add sticker_slabs resolution (separate entity from stickers)
     }
