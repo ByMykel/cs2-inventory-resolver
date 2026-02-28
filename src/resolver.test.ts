@@ -63,7 +63,7 @@ describe('resolveItem', () => {
   it('resolves a skin by def_index + paint_index', () => {
     const result = resolveItem({def_index: 7, paint_index: 282});
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('skin');
+    expect(result!.entity).toBe('skin');
     expect(result!.name).toContain('AK-47');
     expect(result!.image).toBeTruthy();
   });
@@ -73,7 +73,7 @@ describe('resolveItem', () => {
     const kitId = firstKey(data.music_kits);
     const result = resolveItem({def_index: 1314, attribute: [makeAttr(166, kitId)]});
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('music_kit');
+    expect(result!.entity).toBe('music_kit');
     expect(result!.name).toBe(data.music_kits[String(kitId)].name);
   });
 
@@ -82,7 +82,7 @@ describe('resolveItem', () => {
     const hlId = firstKey(data.highlights);
     const result = resolveItem({def_index: 4000, attribute: [makeAttr(314, hlId)]});
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('highlight');
+    expect(result!.entity).toBe('highlight');
     expect(result!.name).toBe(data.highlights[String(hlId)].name);
   });
 
@@ -91,7 +91,7 @@ describe('resolveItem', () => {
     const kcId = firstKey(data.keychains);
     const result = resolveItem({def_index: 4000, attribute: [makeAttr(299, kcId)]});
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('keychain');
+    expect(result!.entity).toBe('keychain');
     expect(result!.name).toBe(data.keychains[String(kcId)].name);
   });
 
@@ -107,7 +107,7 @@ describe('resolveItem', () => {
       attribute: [makeAttr(233, tint)],
     });
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('graffiti');
+    expect(result!.entity).toBe('graffiti');
     expect(result!.name).toBe(data.graffiti[tintedKey].name);
   });
 
@@ -120,38 +120,76 @@ describe('resolveItem', () => {
       attribute: [makeAttr(233, 9999)], // non-existent tint
     });
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('graffiti');
+    expect(result!.entity).toBe('graffiti');
     expect(result!.name).toBe(data.graffiti['1653'].name);
   });
 
-  // 7. Crate
+  // 7. Key
+  it('resolves a key by def_index', () => {
+    const keyId = firstKey(data.keys);
+    const result = resolveItem({def_index: keyId});
+    expect(result).not.toBeNull();
+    expect(result!.entity).toBe('key');
+    expect(result!.name).toBe(data.keys[String(keyId)].name);
+  });
+
+  // 8. Crate
   it('resolves a crate by def_index', () => {
     const crateId = firstKey(data.crates);
     const result = resolveItem({def_index: crateId});
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('crate');
+    expect(result!.entity).toBe('crate');
     expect(result!.name).toBe(data.crates[String(crateId)].name);
   });
 
-  // 8. Collectible
+  // 9. Collectible
   it('resolves a collectible by def_index', () => {
     const colId = firstKey(data.collectibles);
     const result = resolveItem({def_index: colId});
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('collectible');
+    expect(result!.entity).toBe('collectible');
     expect(result!.name).toBe(data.collectibles[String(colId)].name);
   });
 
-  // 9. Sticker
+  // 10. Agent
+  it('resolves an agent by def_index', () => {
+    const agentId = firstKey(data.agents);
+    const result = resolveItem({def_index: agentId});
+    expect(result).not.toBeNull();
+    expect(result!.entity).toBe('agent');
+    expect(result!.name).toBe(data.agents[String(agentId)].name);
+  });
+
+  // 11. Tool
+  it('resolves a tool by def_index', () => {
+    // Tool def_indices (1-4) overlap with skins, but without paint_index the
+    // skin path won't match and it falls through to the tool lookup.
+    const toolId = firstKey(data.tools);
+    const result = resolveItem({def_index: toolId});
+    expect(result).not.toBeNull();
+    expect(result!.entity).toBe('tool');
+    expect(result!.name).toBe(data.tools[String(toolId)].name);
+  });
+
+  // 12. Patch
+  it('resolves a patch by stickers[0].sticker_id', () => {
+    const patchId = firstKey(data.patches);
+    const result = resolveItem({def_index: 50000, stickers: [{sticker_id: patchId}]});
+    expect(result).not.toBeNull();
+    expect(result!.entity).toBe('patch');
+    expect(result!.name).toBe(data.patches[String(patchId)].name);
+  });
+
+  // 13. Sticker
   it('resolves a sticker by stickers[0].sticker_id', () => {
     const stickerId = firstKey(data.stickers);
     const result = resolveItem({def_index: 1209, stickers: [{sticker_id: stickerId}]});
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('sticker');
+    expect(result!.entity).toBe('sticker');
     expect(result!.name).toBe(data.stickers[String(stickerId)].name);
   });
 
-  // 10. Unknown item → null
+  // 14. Unknown item → null
   it('returns null for an unknown def_index', () => {
     expect(resolveItem({def_index: 999999})).toBeNull();
   });
@@ -167,14 +205,31 @@ describe('resolveItem — priority', () => {
     // Craft a fake scenario: even if def_index is a crate, paint_index wins
     // We use AK-47 (7) which is a valid skin weapon
     const result = resolveItem({def_index: 7, paint_index: 282});
-    expect(result!.category).toBe('skin');
+    expect(result!.entity).toBe('skin');
   });
 
   it('music kit attribute takes priority over crate def_index', () => {
     const crateId = firstKey(data.crates);
     const kitId = firstKey(data.music_kits);
     const result = resolveItem({def_index: crateId, attribute: [makeAttr(166, kitId)]});
-    expect(result!.category).toBe('music_kit');
+    expect(result!.entity).toBe('music_kit');
+  });
+
+  it('key takes priority over crate when def_index is in both', () => {
+    // keys and crates don't currently overlap, but key is checked first
+    const keyId = firstKey(data.keys);
+    const result = resolveItem({def_index: keyId});
+    expect(result!.entity).toBe('key');
+  });
+
+  it('patch takes priority over sticker when sticker_id matches both', () => {
+    // Find a patch sticker_id that is also in stickers (if any)
+    const patchKeys = Object.keys(data.patches);
+    const overlapping = patchKeys.find(k => data.stickers[k]);
+    if (overlapping) {
+      const result = resolveItem({def_index: 50000, stickers: [{sticker_id: Number(overlapping)}]});
+      expect(result!.entity).toBe('patch');
+    }
   });
 });
 
@@ -186,14 +241,14 @@ describe('resolveItem — edge cases', () => {
     const crateId = firstKey(data.crates);
     const result = resolveItem({def_index: crateId, paint_index: 0});
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('crate');
+    expect(result!.entity).toBe('crate');
   });
 
   it('empty stickers array does not crash', () => {
     const crateId = firstKey(data.crates);
     const result = resolveItem({def_index: crateId, stickers: []});
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('crate');
+    expect(result!.entity).toBe('crate');
   });
 
   it('handles undefined optional fields gracefully', () => {
@@ -205,6 +260,6 @@ describe('resolveItem — edge cases', () => {
       attribute: undefined,
     });
     expect(result).not.toBeNull();
-    expect(result!.category).toBe('crate');
+    expect(result!.entity).toBe('crate');
   });
 });

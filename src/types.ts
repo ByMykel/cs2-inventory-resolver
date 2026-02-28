@@ -1,12 +1,16 @@
-/** Possible CS2 item categories returned by {@link resolveItem}. */
-export type ItemCategory =
+/** Possible CS2 item entity types returned by {@link resolveItem}. */
+export type ItemEntity =
   | 'skin'
   | 'music_kit'
   | 'highlight'
   | 'keychain'
   | 'graffiti'
   | 'crate'
+  | 'key'
   | 'collectible'
+  | 'agent'
+  | 'tool'
+  | 'patch'
   | 'sticker';
 
 /** The resolved information for a CS2 inventory item. */
@@ -15,8 +19,8 @@ export interface ResolvedItemData {
   name: string;
   /** URL to the item's image. */
   image: string;
-  /** The resolved item category. */
-  category: ItemCategory;
+  /** The resolved item entity type. */
+  entity: ItemEntity;
 }
 
 /**
@@ -56,4 +60,9 @@ export interface InventoryData {
   music_kits: Record<string, ItemEntry>;
   keychains: Record<string, ItemEntry>;
   highlights: Record<string, ItemEntry>;
+  agents: Record<string, ItemEntry>;
+  patches: Record<string, ItemEntry>;
+  keys: Record<string, ItemEntry>;
+  sticker_slabs: Record<string, ItemEntry>;
+  tools: Record<string, ItemEntry>;
 }

@@ -2,7 +2,7 @@ import type {GcItemInput, ResolvedItemData} from './types.js';
 import {getData} from './data-loader.js';
 
 /**
- * Resolve a raw GC item into a name, image, and category.
+ * Resolve a raw GC item into a name, image, and entity.
  *
  * Resolution priority:
  * 1. Skins (by `def_index` + `paint_index`)
@@ -10,9 +10,14 @@ import {getData} from './data-loader.js';
  * 3. Highlights / souvenir charms (by attribute 314)
  * 4. Keychains (by attribute 299)
  * 5. Graffiti (by `stickers[0].sticker_id` + attribute 233)
- * 6. Crates / cases / keys (by `def_index`)
- * 7. Collectibles (by `def_index`)
- * 8. Stickers / patches (by `stickers[0].sticker_id`)
+ * 6. Keys (by `def_index`)
+ * 7. Crates / cases (by `def_index`)
+ * 8. Collectibles (by `def_index`)
+ * 9. Agents (by `def_index`)
+ * 10. Tools (by `def_index`)
+ * 11. Patches (by `stickers[0].sticker_id`)
+ * 12. Stickers (by `stickers[0].sticker_id`)
+ * 13. Sticker slabs — TODO: add sticker_slabs resolution
  *
  * @param gcItem - The raw GC item to resolve.
  * @returns The resolved item data, or `null` if the item could not be identified.
@@ -20,7 +25,7 @@ import {getData} from './data-loader.js';
  * @example
  * ```ts
  * const result = resolveItem({ def_index: 7, paint_index: 282 });
- * // => { name: "AK-47 | Redline", image: "https://...", category: "skin" }
+ * // => { name: "AK-47 | Redline", image: "https://...", entity: "skin" }
  * ```
  */
 export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
@@ -38,26 +43,26 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
     const weapon = data.skins[defIdx];
     if (weapon) {
       const skin = weapon[String(gcItem.paint_index)];
-      if (skin) return {name: skin.name, image: skin.image, category: 'skin'};
+      if (skin) return {name: skin.name, image: skin.image, entity: 'skin'};
     }
   }
 
   // 2. Music kits: music_index (attribute 166)
   if (musicIndex && musicIndex > 0) {
     const kit = data.music_kits[String(musicIndex)];
-    if (kit) return {name: kit.name, image: kit.image, category: 'music_kit'};
+    if (kit) return {name: kit.name, image: kit.image, entity: 'music_kit'};
   }
 
   // 3. Highlights (souvenir charms): highlight_index (attribute 314)
   if (highlightIndex && highlightIndex > 0) {
     const highlight = data.highlights[String(highlightIndex)];
-    if (highlight) return {name: highlight.name, image: highlight.image, category: 'highlight'};
+    if (highlight) return {name: highlight.name, image: highlight.image, entity: 'highlight'};
   }
 
   // 4. Keychains (charms): keychain_index (attribute 299)
   if (keychainIndex && keychainIndex > 0) {
     const keychain = data.keychains[String(keychainIndex)];
-    if (keychain) return {name: keychain.name, image: keychain.image, category: 'keychain'};
+    if (keychain) return {name: keychain.name, image: keychain.image, entity: 'keychain'};
   }
 
   // 5. Graffiti: stickers[0].sticker_id + graffiti_tint (attribute 233)
@@ -66,27 +71,45 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
     if (stickerId) {
       const tintedKey = `${stickerId}_${graffitiTint}`;
       const tinted = data.graffiti[tintedKey];
-      if (tinted) return {name: tinted.name, image: tinted.image, category: 'graffiti'};
+      if (tinted) return {name: tinted.name, image: tinted.image, entity: 'graffiti'};
 
       const mono = data.graffiti[String(stickerId)];
-      if (mono) return {name: mono.name, image: mono.image, category: 'graffiti'};
+      if (mono) return {name: mono.name, image: mono.image, entity: 'graffiti'};
     }
   }
 
-  // 6. Crates / cases / keys
+  // 6. Keys
+  const key = data.keys[defIdx];
+  if (key) return {name: key.name, image: key.image, entity: 'key'};
+
+  // 7. Crates / cases
   const crate = data.crates[defIdx];
-  if (crate) return {name: crate.name, image: crate.image, category: 'crate'};
+  if (crate) return {name: crate.name, image: crate.image, entity: 'crate'};
 
-  // 7. Collectibles (coins, pins, etc.)
+  // 8. Collectibles (coins, pins, etc.)
   const collectible = data.collectibles[defIdx];
-  if (collectible) return {name: collectible.name, image: collectible.image, category: 'collectible'};
+  if (collectible) return {name: collectible.name, image: collectible.image, entity: 'collectible'};
 
-  // 8. Stickers/patches as items: use stickers[0].sticker_id
+  // 9. Agents (characters)
+  const agent = data.agents[defIdx];
+  if (agent) return {name: agent.name, image: agent.image, entity: 'agent'};
+
+  // 10. Tools (Name Tag, Storage Unit, etc.)
+  const tool = data.tools[defIdx];
+  if (tool) return {name: tool.name, image: tool.image, entity: 'tool'};
+
+  // 11. Patches: use stickers[0].sticker_id (checked before stickers)
   if (gcItem.stickers?.length) {
     const stickerId = gcItem.stickers[0].sticker_id;
     if (stickerId) {
+      const patch = data.patches[String(stickerId)];
+      if (patch) return {name: patch.name, image: patch.image, entity: 'patch'};
+
+      // 12. Stickers
       const sticker = data.stickers[String(stickerId)];
-      if (sticker) return {name: sticker.name, image: sticker.image, category: 'sticker'};
+      if (sticker) return {name: sticker.name, image: sticker.image, entity: 'sticker'};
+
+      // TODO: add sticker_slabs resolution (separate entity from stickers)
     }
   }
 
