@@ -1,0 +1,38 @@
+name: Update inventory data
+
+on:
+  schedule:
+    - cron: '0 0 * * 1' # Every Monday at midnight UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch upstream inventory.json
+        run: curl -sSfL -o data/inventory.json "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/inventory.json"
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet data/inventory.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push updated inventory data
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/inventory.json
+          git commit -m "chore: update inventory data"
+          git push origin main
