@@ -28,11 +28,53 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Commit and push updated inventory data
+      - name: Commit updated inventory data
         if: steps.diff.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/inventory.json
           git commit -m "chore: update inventory data"
-          git push origin main
+
+      - name: Bump patch version
+        if: steps.diff.outputs.changed == 'true'
+        id: version
+        run: |
+          NEW_VERSION=$(npm version patch --no-git-tag-version)
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          git add package.json package-lock.json
+          git commit -m "$NEW_VERSION"
+          git tag "$NEW_VERSION"
+
+      - name: Push commits and tag
+        if: steps.diff.outputs.changed == 'true'
+        run: git push origin main --tags
+
+      - name: Setup Node.js
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies and build
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          npm ci
+          npm run build
+          npm test
+
+      - name: Publish to npm
+        if: steps.diff.outputs.changed == 'true'
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub release
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          gh release create "${{ steps.version.outputs.version }}" \
+            --title "${{ steps.version.outputs.version }}" \
+            --notes "- Update inventory data"
+        env:
+          GH_TOKEN: ${{ github.token }}
