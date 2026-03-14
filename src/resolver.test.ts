@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {resolveItem, getAttributeUint32, getWearName, hasAttribute, buildSkinName} from './resolver.js';
+import {resolveItem, getAttributeUint32} from './resolver.js';
 import {getData} from './data-loader.js';
 
 /** Build an attribute entry with a uint32 LE-encoded value. */
@@ -53,110 +53,21 @@ describe('getAttributeUint32', () => {
     const item = {attribute: [makeAttr(100, 1), makeAttr(166, 99), makeAttr(200, 3)]};
     expect(getAttributeUint32(item, 166)).toBe(99);
   });
-});
 
-// ---------------------------------------------------------------------------
-// getWearName
-// ---------------------------------------------------------------------------
-describe('getWearName', () => {
-  it('returns Factory New for wear <= 0.07', () => {
-    expect(getWearName(0.05)).toBe('Factory New');
-    expect(getWearName(0.07)).toBe('Factory New');
-  });
-
-  it('returns Minimal Wear for wear <= 0.15', () => {
-    expect(getWearName(0.10)).toBe('Minimal Wear');
-    expect(getWearName(0.15)).toBe('Minimal Wear');
-  });
-
-  it('returns Field-Tested for wear <= 0.38', () => {
-    expect(getWearName(0.30)).toBe('Field-Tested');
-    expect(getWearName(0.38)).toBe('Field-Tested');
-  });
-
-  it('returns Well-Worn for wear <= 0.45', () => {
-    expect(getWearName(0.40)).toBe('Well-Worn');
-    expect(getWearName(0.45)).toBe('Well-Worn');
-  });
-
-  it('returns Battle-Scarred for wear > 0.45', () => {
-    expect(getWearName(0.80)).toBe('Battle-Scarred');
-    expect(getWearName(1.0)).toBe('Battle-Scarred');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// hasAttribute
-// ---------------------------------------------------------------------------
-describe('hasAttribute', () => {
-  it('returns true when the attribute exists', () => {
-    expect(hasAttribute({attribute: [makeAttr(80, 1)]}, 80)).toBe(true);
-  });
-
-  it('returns false when the attribute does not exist', () => {
-    expect(hasAttribute({attribute: [makeAttr(80, 1)]}, 140)).toBe(false);
-  });
-
-  it('returns false when attribute array is empty', () => {
-    expect(hasAttribute({attribute: []}, 80)).toBe(false);
-  });
-
-  it('returns false when attribute array is missing', () => {
-    expect(hasAttribute({}, 80)).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// buildSkinName
-// ---------------------------------------------------------------------------
-describe('buildSkinName', () => {
-  it('returns name with wear for a normal skin', () => {
+  it('returns 0 for a zero-filled 4-byte buffer', () => {
+    const buf = Buffer.alloc(4, 0);
     expect(
-      buildSkinName('AK-47 | Redline', {def_index: 7, paint_wear: 0.30}),
-    ).toBe('AK-47 | Redline (Field-Tested)');
+      getAttributeUint32({attribute: [{def_index: 166, value_bytes: buf}]}, 166),
+    ).toBe(0);
   });
 
-  it('prefixes StatTrak™ for regular skins', () => {
+  it('reads only the first 4 bytes from a longer buffer', () => {
+    const buf = Buffer.alloc(8);
+    buf.writeUInt32LE(123, 0);
+    buf.writeUInt32LE(999, 4);
     expect(
-      buildSkinName('AK-47 | Redline', {
-        def_index: 7,
-        paint_wear: 0.30,
-        attribute: [makeAttr(80, 1)],
-      }),
-    ).toBe('StatTrak™ AK-47 | Redline (Field-Tested)');
-  });
-
-  it('prefixes Souvenir for regular skins', () => {
-    expect(
-      buildSkinName('AK-47 | Redline', {
-        def_index: 7,
-        paint_wear: 0.30,
-        attribute: [makeAttr(140, 1)],
-      }),
-    ).toBe('Souvenir AK-47 | Redline (Field-Tested)');
-  });
-
-  it('knife name keeps ★ from data without duplication', () => {
-    expect(
-      buildSkinName('★ Karambit | Fade', {def_index: 507, quality: 3, paint_wear: 0.01}),
-    ).toBe('★ Karambit | Fade (Factory New)');
-  });
-
-  it('inserts StatTrak™ after ★ for quality 3 knives', () => {
-    expect(
-      buildSkinName('★ Karambit | Fade', {
-        def_index: 507,
-        quality: 3,
-        paint_wear: 0.01,
-        attribute: [makeAttr(80, 1)],
-      }),
-    ).toBe('★ StatTrak™ Karambit | Fade (Factory New)');
-  });
-
-  it('returns name without wear suffix when paint_wear is absent', () => {
-    expect(
-      buildSkinName('AK-47 | Redline', {def_index: 7}),
-    ).toBe('AK-47 | Redline');
+      getAttributeUint32({attribute: [{def_index: 166, value_bytes: buf}]}, 166),
+    ).toBe(123);
   });
 });
 
@@ -436,5 +347,98 @@ describe('resolveItem — edge cases', () => {
     });
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('crate');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wear-name boundaries via resolveItem (AK-47 Redline, def 7 paint 282)
+// ---------------------------------------------------------------------------
+describe('resolveItem — wear-name boundaries', () => {
+  const skin = {def_index: 7, paint_index: 282};
+
+  it('Factory New at boundary (0.07)', () => {
+    const result = resolveItem({...skin, paint_wear: 0.07});
+    expect(result!.name).toContain('(Factory New)');
+  });
+
+  it('Minimal Wear just above Factory New boundary (0.071)', () => {
+    const result = resolveItem({...skin, paint_wear: 0.071});
+    expect(result!.name).toContain('(Minimal Wear)');
+  });
+
+  it('Minimal Wear at boundary (0.15)', () => {
+    const result = resolveItem({...skin, paint_wear: 0.15});
+    expect(result!.name).toContain('(Minimal Wear)');
+  });
+
+  it('Field-Tested just above Minimal Wear boundary (0.151)', () => {
+    const result = resolveItem({...skin, paint_wear: 0.151});
+    expect(result!.name).toContain('(Field-Tested)');
+  });
+
+  it('Field-Tested at boundary (0.38)', () => {
+    const result = resolveItem({...skin, paint_wear: 0.38});
+    expect(result!.name).toContain('(Field-Tested)');
+  });
+
+  it('Well-Worn just above Field-Tested boundary (0.381)', () => {
+    const result = resolveItem({...skin, paint_wear: 0.381});
+    expect(result!.name).toContain('(Well-Worn)');
+  });
+
+  it('Well-Worn at boundary (0.45)', () => {
+    const result = resolveItem({...skin, paint_wear: 0.45});
+    expect(result!.name).toContain('(Well-Worn)');
+  });
+
+  it('Battle-Scarred just above Well-Worn boundary (0.451)', () => {
+    const result = resolveItem({...skin, paint_wear: 0.451});
+    expect(result!.name).toContain('(Battle-Scarred)');
+  });
+
+  it('Battle-Scarred at 1.0', () => {
+    const result = resolveItem({...skin, paint_wear: 1.0});
+    expect(result!.name).toContain('(Battle-Scarred)');
+  });
+
+  it('Factory New at 0.0', () => {
+    const result = resolveItem({...skin, paint_wear: 0.0});
+    expect(result!.name).toContain('(Factory New)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Numeric edge cases
+// ---------------------------------------------------------------------------
+describe('resolveItem — numeric edge cases', () => {
+  it('NaN paint_wear still resolves as a skin', () => {
+    const result = resolveItem({def_index: 7, paint_index: 282, paint_wear: NaN});
+    expect(result).not.toBeNull();
+    expect(result!.entity).toBe('skin');
+    // NaN fails all <= checks, so falls through to Battle-Scarred
+    expect(result!.name).toContain('(Battle-Scarred)');
+  });
+
+  it('Infinity paint_wear resolves as Battle-Scarred', () => {
+    const result = resolveItem({def_index: 7, paint_index: 282, paint_wear: Infinity});
+    expect(result).not.toBeNull();
+    expect(result!.name).toContain('(Battle-Scarred)');
+  });
+
+  it('negative paint_wear resolves as Factory New', () => {
+    const result = resolveItem({def_index: 7, paint_index: 282, paint_wear: -1});
+    expect(result).not.toBeNull();
+    expect(result!.name).toContain('(Factory New)');
+  });
+
+  it('fractional def_index is coerced to string for lookup', () => {
+    // 7.5 becomes "7.5" which won't match any key → null
+    const result = resolveItem({def_index: 7.5});
+    expect(result).toBeNull();
+  });
+
+  it('negative def_index returns null', () => {
+    const result = resolveItem({def_index: -1});
+    expect(result).toBeNull();
   });
 });

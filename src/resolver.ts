@@ -6,7 +6,7 @@ import {getData} from './data-loader.js';
  *
  * @param paintWear - A float between 0.0 and 1.0.
  */
-export function getWearName(paintWear: number): string {
+function getWearName(paintWear: number): string {
   if (paintWear <= 0.07) return 'Factory New';
   if (paintWear <= 0.15) return 'Minimal Wear';
   if (paintWear <= 0.38) return 'Field-Tested';
@@ -17,7 +17,7 @@ export function getWearName(paintWear: number): string {
 /**
  * Check whether a GC item has a specific attribute by def_index.
  */
-export function hasAttribute(
+function hasAttribute(
   item: {attribute?: {def_index: number}[]},
   attrDefIndex: number,
 ): boolean {
@@ -35,7 +35,7 @@ export function hasAttribute(
  * - `Souvenir ` if attribute 140 exists.
  * - ` (WearName)` suffix if `paint_wear` is present.
  */
-export function buildSkinName(name: string, gcItem: GcItemInput): string {
+function buildSkinName(name: string, gcItem: GcItemInput): string {
   let qualifier = '';
   if (hasAttribute(gcItem, 80)) qualifier = 'StatTrak™ ';
   else if (hasAttribute(gcItem, 140)) qualifier = 'Souvenir ';
@@ -98,7 +98,6 @@ function makeResult(
  */
 export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
   const data = getData();
-  if (!data) return null;
 
   const defIdx = String(gcItem.def_index);
   const musicIndex = getAttributeUint32(gcItem, 166);
