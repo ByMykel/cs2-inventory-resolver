@@ -2,7 +2,7 @@ name: Update inventory data
 
 on:
   schedule:
-    - cron: '0 0 * * 1' # Every Monday at midnight UTC
+    - cron: '0 6 * * *' # Every day at 06:00 UTC
   workflow_dispatch:
 
 permissions:
