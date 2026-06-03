@@ -408,6 +408,39 @@ describe('resolveItem — wear-name boundaries', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Trade status (attribute 312 — trade_protected_escrow_date)
+// ---------------------------------------------------------------------------
+describe('resolveItem — trade status', () => {
+  const skin = {def_index: 7, paint_index: 282};
+
+  it('is "tradable" when attribute 312 is absent', () => {
+    const result = resolveItem({...skin});
+    expect(result!.status).toBe('tradable');
+    expect(result!.trade_hold_expires).toBeNull();
+  });
+
+  it('is "market_listed" when attribute 312 is 0', () => {
+    const result = resolveItem({...skin, attribute: [makeAttr(312, 0)]});
+    expect(result!.status).toBe('market_listed');
+    expect(result!.trade_hold_expires).toBeNull();
+  });
+
+  it('is "trade_hold" with an ISO expiry when attribute 312 is a future date', () => {
+    // 1781161200 = 2026-06-11T07:00:00.000Z
+    const result = resolveItem({...skin, attribute: [makeAttr(312, 1781161200)]});
+    expect(result!.status).toBe('trade_hold');
+    expect(result!.trade_hold_expires).toBe('2026-06-11T07:00:00.000Z');
+  });
+
+  it('resolves trade status for non-skin entities too', () => {
+    const crateId = firstKey(data.crates);
+    const result = resolveItem({def_index: crateId, attribute: [makeAttr(312, 0)]});
+    expect(result!.entity).toBe('crate');
+    expect(result!.status).toBe('market_listed');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Numeric edge cases
 // ---------------------------------------------------------------------------
 describe('resolveItem — numeric edge cases', () => {

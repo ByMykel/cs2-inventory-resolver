@@ -63,6 +63,19 @@ Returns `null` if the item could not be identified.
 | `entity` | `ItemEntity` | Item type (`skin`, `crate`, `key`, `collectible`, etc.) |
 | `rarity` | `{id, name, color} \| null` | Rarity info or `null` |
 | `marketable` | `boolean` | Whether the item is marketable on Steam |
+| `status` | `TradeStatus` | Trade state of this instance (see below) |
+| `trade_hold_expires` | `string \| null` | ISO 8601 trade-hold expiry, or `null` |
+
+#### Trade status (`TradeStatus`)
+
+Derived from attribute `312` (`trade_protected_escrow_date`). Items that are not
+`'tradable'` cannot be moved into or out of a storage unit.
+
+| Value | Meaning | `trade_hold_expires` |
+|-------|---------|--------------------|
+| `'tradable'` | No hold — freely tradable and movable (attribute absent) | `null` |
+| `'market_listed'` | Listed on the Steam Community Market, kept in the inventory until it sells (attribute is `0`) | `null` |
+| `'trade_hold'` | Under a trade-protection / escrow hold (attribute is a future timestamp) | ISO date |
 
 ### `getAttributeUint32(item, attrDefIndex)`
 

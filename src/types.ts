@@ -13,6 +13,21 @@ export type ItemEntity =
   | 'patch'
   | 'sticker';
 
+/**
+ * Current trade state of a specific item instance, derived from attribute 312
+ * (`trade_protected_escrow_date`).
+ *
+ * - `'tradable'` — no hold; the item can be freely traded and moved to/from storage.
+ * - `'market_listed'` — listed on the Steam Community Market and kept in the
+ *   inventory until it sells (escrow date is `0`).
+ * - `'trade_hold'` — under a trade-protection / escrow hold (escrow date is a
+ *   future timestamp).
+ *
+ * Items that are `'market_listed'` or `'trade_hold'` cannot be moved into or out
+ * of a storage unit.
+ */
+export type TradeStatus = 'tradable' | 'market_listed' | 'trade_hold';
+
 /** The resolved information for a CS2 inventory item. */
 export interface ResolvedItemData {
   /** The human-readable item name (e.g. `"AK-47 | Redline"`). */
@@ -25,6 +40,13 @@ export interface ResolvedItemData {
   rarity: {id: string; name: string; color: string} | null;
   /** Whether the item is marketable on the Steam Community Market. */
   marketable: boolean;
+  /** Current trade state of this specific item instance. See {@link TradeStatus}. */
+  status: TradeStatus;
+  /**
+   * When a trade hold expires, as an ISO 8601 string, or `null`.
+   * Always `null` for `'tradable'` and `'market_listed'` (held until sold).
+   */
+  trade_hold_expires: string | null;
 }
 
 /**
@@ -47,7 +69,8 @@ export interface GcItemInput {
    * Raw attribute array from the GC message.
    *
    * Used to extract `music_index` (def_index 166), `graffiti_tint` (def_index 233),
-   * `keychain_index` (def_index 299), and `highlight_index` (def_index 314) via {@link getAttributeUint32}.
+   * `keychain_index` (def_index 299), `highlight_index` (def_index 314), and the
+   * `trade_protected_escrow_date` (def_index 312) via {@link getAttributeUint32}.
    */
   attribute?: {def_index: number; value_bytes?: Buffer}[];
 }

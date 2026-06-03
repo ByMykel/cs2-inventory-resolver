@@ -1,5 +1,31 @@
-import type {GcItemInput, ItemEntry, ResolvedItemData} from './types.js';
+import type {GcItemInput, ItemEntry, ResolvedItemData, TradeStatus} from './types.js';
 import {getData} from './data-loader.js';
+
+/** The `trade_protected_escrow_date` attribute def_index. */
+const TRADE_PROTECTED_ESCROW_DATE = 312;
+
+/**
+ * Derive the trade state of an item instance from attribute 312
+ * (`trade_protected_escrow_date`).
+ *
+ * - Attribute absent → `'tradable'`.
+ * - Attribute present and `0` → `'market_listed'` (listed on the Steam
+ *   Community Market, kept in inventory until it sells; no clear date).
+ * - Attribute present and a future timestamp → `'trade_hold'`, with the escrow
+ *   expiry returned as an ISO 8601 string.
+ */
+function resolveTradeStatus(gcItem: GcItemInput): {
+  status: TradeStatus;
+  trade_hold_expires: string | null;
+} {
+  const escrow = getAttributeUint32(gcItem, TRADE_PROTECTED_ESCROW_DATE);
+  if (escrow === undefined) return {status: 'tradable', trade_hold_expires: null};
+  if (escrow === 0) return {status: 'market_listed', trade_hold_expires: null};
+  return {
+    status: 'trade_hold',
+    trade_hold_expires: new Date(escrow * 1000).toISOString(),
+  };
+}
 
 /**
  * Return the wear tier name for a given paint wear float.
@@ -60,12 +86,15 @@ function makeResult(
   gcItem: GcItemInput,
   entity: ResolvedItemData['entity'],
 ): ResolvedItemData {
+  const {status, trade_hold_expires} = resolveTradeStatus(gcItem);
   return {
     name: entity === 'skin' ? buildSkinName(entry.name, gcItem) : entry.name,
     image: entry.image,
     entity,
     rarity: entry.rarity,
     marketable: entry.marketable,
+    status,
+    trade_hold_expires,
   };
 }
 
