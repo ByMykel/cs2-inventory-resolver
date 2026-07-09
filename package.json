@@ -1,6 +1,6 @@
 {
   "name": "cs2-inventory-resolver",
-  "version": "0.4.12",
+  "version": "0.4.13",
   "description": "Resolve CS2 Game Coordinator protobuf items into human-readable names, images, and categories",
   "keywords": [
     "cs2",
