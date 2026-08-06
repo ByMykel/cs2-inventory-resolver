@@ -28,10 +28,16 @@ const SINGULAR = {
 
 const MAX_LISTED = 15;
 
-const label = (category, count) => {
+const label = (change, count) => {
+  const category = change.category ?? change;
   const singular = SINGULAR[category] ?? category.replace(/_/g, ' ');
   const plural = singular === 'graffiti' ? 'graffiti' : `${singular}s`;
-  return `${count} ${count === 1 ? singular : plural}`;
+  const base = `${count} ${count === 1 ? singular : plural}`;
+  if (!change.mirroredBy) return base;
+
+  const mirror = SINGULAR[change.mirroredBy] ?? change.mirroredBy;
+  // "579 stickers (and matching sticker slabs)"
+  return `${base} (and matching ${mirror}s)`;
 };
 
 // Flattens one category into a Map of stable key -> display name.
@@ -63,13 +69,29 @@ function diff(oldData, newData) {
     const before = entries(category, oldData[category]);
     const after = entries(category, newData[category]);
 
-    const added = [...after].filter(([key]) => !before.has(key)).map(([, name]) => name);
-    const removed = [...before].filter(([key]) => !after.has(key)).map(([, name]) => name);
+    const added = [...after].filter(([key]) => !before.has(key)).map(([key, name]) => ({ key, name }));
+    const removed = [...before].filter(([key]) => !after.has(key)).map(([key, name]) => ({ key, name }));
 
     if (added.length || removed.length) result.push({ category, added, removed });
   }
 
   return result;
+}
+
+// Every sticker has a matching sticker slab, so a capsule release shows up
+// twice. Fold the mirror into the primary category when both sides changed
+// identically - if they ever diverge, keep them separate so it is visible.
+function foldMirrored(changes, primary, mirror) {
+  const a = changes.find((c) => c.category === primary);
+  const b = changes.find((c) => c.category === mirror);
+  if (!a || !b) return changes;
+
+  const keys = (items) => items.map((i) => i.key).sort().join(',');
+  const identical = keys(a.added) === keys(b.added) && keys(a.removed) === keys(b.removed);
+  if (!identical) return changes;
+
+  a.mirroredBy = mirror;
+  return changes.filter((c) => c !== b);
 }
 
 const [, , oldPath, newPath, prevTag, newTag] = process.argv;
@@ -81,7 +103,7 @@ if (!oldPath || !newPath) {
 
 const oldData = JSON.parse(readFileSync(oldPath, 'utf8'));
 const newData = JSON.parse(readFileSync(newPath, 'utf8'));
-const changes = diff(oldData, newData);
+const changes = foldMirrored(diff(oldData, newData), 'stickers', 'sticker_slabs');
 
 const lines = ['## Inventory data update', ''];
 
@@ -94,15 +116,15 @@ if (!added.length && !removed.length) {
   lines.push('**Changed** — item metadata only, no items added or removed');
 } else {
   if (added.length) {
-    lines.push(`**Added** — ${added.map((c) => label(c.category, c.added.length)).join(', ')}`);
+    lines.push(`**Added** — ${added.map((c) => label(c, c.added.length)).join(', ')}`);
   }
   if (removed.length) {
-    lines.push(`**Removed** — ${removed.map((c) => label(c.category, c.removed.length)).join(', ')}`);
+    lines.push(`**Removed** — ${removed.map((c) => label(c, c.removed.length)).join(', ')}`);
   }
 }
 
 if (added.length) {
-  const flat = added.flatMap((c) => c.added.map((name) => `- ${SINGULAR[c.category] ?? c.category}: ${name}`));
+  const flat = added.flatMap((c) => c.added.map(({ name }) => `- ${SINGULAR[c.category] ?? c.category}: ${name}`));
   lines.push('', '<details><summary>New items</summary>', '');
   lines.push(...flat.slice(0, MAX_LISTED));
   if (flat.length > MAX_LISTED) lines.push(`- …and ${flat.length - MAX_LISTED} more`);
@@ -110,7 +132,7 @@ if (added.length) {
 }
 
 if (removed.length) {
-  const flat = removed.flatMap((c) => c.removed.map((name) => `- ${SINGULAR[c.category] ?? c.category}: ${name}`));
+  const flat = removed.flatMap((c) => c.removed.map(({ name }) => `- ${SINGULAR[c.category] ?? c.category}: ${name}`));
   lines.push('', '<details><summary>Removed items</summary>', '');
   lines.push(...flat.slice(0, MAX_LISTED));
   if (flat.length > MAX_LISTED) lines.push(`- …and ${flat.length - MAX_LISTED} more`);
