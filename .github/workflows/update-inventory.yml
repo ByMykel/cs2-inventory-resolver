@@ -5,6 +5,10 @@ on:
     - cron: '0 6 * * *' # Every day at 06:00 UTC
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -14,10 +18,27 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
 
       - name: Fetch upstream inventory.json
-        run: curl -sSfL "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/inventory.json" | jq -c . > data/inventory.json
+        run: |
+          set -euo pipefail
+          curl -sSfL --retry 3 --retry-delay 5 \
+            "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/inventory.json" \
+            -o "$RUNNER_TEMP/inventory.raw.json"
+          jq -e '
+            type == "object"
+            and ((["skins","crates","stickers","keychains","agents"] - keys) == [])
+            and (.skins | length) > 0
+          ' "$RUNNER_TEMP/inventory.raw.json" > /dev/null
+          jq -c . "$RUNNER_TEMP/inventory.raw.json" > "$RUNNER_TEMP/inventory.min.json"
+          mv "$RUNNER_TEMP/inventory.min.json" data/inventory.json
 
       - name: Check for changes
         id: diff
@@ -27,6 +48,20 @@ jobs:
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Snapshot previous state
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git show HEAD:data/inventory.json > "$RUNNER_TEMP/inventory.old.json"
+          echo "PREV_VERSION=v$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Install, build and test
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          npm ci
+          npm run build
+          npm test
 
       - name: Commit updated inventory data
         if: steps.diff.outputs.changed == 'true'
@@ -46,23 +81,21 @@ jobs:
           git commit -m "$NEW_VERSION"
           git tag "$NEW_VERSION"
 
-      - name: Push commits and tag
-        if: steps.diff.outputs.changed == 'true'
-        run: git push origin main --tags
-
-      - name: Setup Node.js
-        if: steps.diff.outputs.changed == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org
-
-      - name: Install dependencies and build
+      - name: Generate release notes
         if: steps.diff.outputs.changed == 'true'
         run: |
-          npm ci
-          npm run build
-          npm test
+          set -euo pipefail
+          node scripts/release-notes.mjs \
+            "$RUNNER_TEMP/inventory.old.json" \
+            data/inventory.json \
+            "$PREV_VERSION" \
+            "${{ steps.version.outputs.version }}" \
+            > "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md"
+
+      - name: Push commits and tag
+        if: steps.diff.outputs.changed == 'true'
+        run: git push origin main "${{ steps.version.outputs.version }}"
 
       - name: Publish to npm
         if: steps.diff.outputs.changed == 'true'
@@ -75,6 +108,6 @@ jobs:
         run: |
           gh release create "${{ steps.version.outputs.version }}" \
             --title "${{ steps.version.outputs.version }}" \
-            --notes "- Update inventory data"
+            --notes-file "$RUNNER_TEMP/release-notes.md"
         env:
           GH_TOKEN: ${{ github.token }}
