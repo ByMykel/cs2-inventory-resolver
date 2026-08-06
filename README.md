@@ -8,6 +8,16 @@ Resolve raw CS2 Game Coordinator (GC) items into human-readable names, images, a
 npm install cs2-inventory-resolver
 ```
 
+This package is ESM-only. Use `import`, or `await import()` from CommonJS.
+
+## Where the input comes from
+
+`resolveItem` takes a raw `CSOEconItem` as delivered by the CS2 Game Coordinator —
+the shape you get from [`node-globaloffensive`](https://github.com/DoctorMcKay/node-globaloffensive)
+(via [`steam-user`](https://github.com/DoctorMcKay/node-steam-user)) when reading an
+inventory. This library does no networking of its own; it only turns those raw
+items into readable data.
+
 ## Usage
 
 ### `resolveItem(gcItem)`
@@ -26,19 +36,36 @@ import { resolveItem } from 'cs2-inventory-resolver';
 
 // Regular skin
 resolveItem({ def_index: 7, paint_index: 282, paint_wear: 0.30 });
-// => { name: "AK-47 | Redline (Field-Tested)", image: "https://...", entity: "skin", rarity: { id: "rarity_mythical_weapon", name: "Restricted", color: "#8847ff" }, marketable: true }
+// => {
+//      name: "AK-47 | Redline (Field-Tested)",
+//      image: "https://community.akamai.steamstatic.com/economy/image/...",
+//      entity: "skin",
+//      rarity: { id: "rarity_legendary_weapon", name: "Classified", color: "#d32ce6" },
+//      marketable: true,
+//      status: "tradable",
+//      trade_hold_expires: null
+//    }
 
-// StatTrak skin
-resolveItem({ def_index: 7, paint_index: 282, paint_wear: 0.30, attribute: [{ def_index: 80, value_bytes: ... }] });
+// StatTrak skin (attribute 80 present)
+const statTrak = [{ def_index: 80, value_bytes: Buffer.from([1, 0, 0, 0]) }];
+resolveItem({ def_index: 7, paint_index: 282, paint_wear: 0.30, attribute: statTrak });
 // => { name: "StatTrak™ AK-47 | Redline (Field-Tested)", ... }
 
 // StatTrak knife (quality 3 = ★ already in name)
-resolveItem({ def_index: 507, paint_index: 38, quality: 3, paint_wear: 0.01, attribute: [{ def_index: 80, value_bytes: ... }] });
-// => { name: "★ StatTrak™ Karambit | Fade (Factory New)", ... }
+resolveItem({ def_index: 507, paint_index: 38, quality: 3, paint_wear: 0.01, attribute: statTrak });
+// => { name: "★ StatTrak™ Karambit | Fade (Factory New)", entity: "skin", ... }
 
 // Non-skin item
-resolveItem({ def_index: 1505 });
-// => { name: "CS:GO Case Key", image: "https://...", entity: "key", rarity: null, marketable: true }
+resolveItem({ def_index: 1203 });
+// => {
+//      name: "CS:GO Case Key",
+//      image: "https://community.akamai.steamstatic.com/economy/image/...",
+//      entity: "key",
+//      rarity: null,
+//      marketable: true,
+//      status: "tradable",
+//      trade_hold_expires: null
+//    }
 ```
 
 Returns `null` if the item could not be identified.
@@ -77,6 +104,18 @@ Derived from attribute `312` (`trade_protected_escrow_date`). Items that are not
 | `'market_listed'` | Listed on the Steam Community Market, kept in the inventory until it sells (attribute is `0`) | `null` |
 | `'trade_hold'` | Under a trade-protection / escrow hold (attribute is a future timestamp) | ISO date |
 
+```ts
+const escrow = Buffer.alloc(4);
+escrow.writeUInt32LE(Math.floor(new Date('2026-09-01T12:00:00Z').getTime() / 1000));
+
+resolveItem({ def_index: 7, paint_index: 282, paint_wear: 0.30, attribute: [{ def_index: 312, value_bytes: escrow }] });
+// => { ..., status: "trade_hold", trade_hold_expires: "2026-09-01T12:00:00.000Z" }
+
+// An escrow date of 0 means the item is listed on the Market
+resolveItem({ def_index: 7, paint_index: 282, paint_wear: 0.30, attribute: [{ def_index: 312, value_bytes: Buffer.alloc(4) }] });
+// => { ..., status: "market_listed", trade_hold_expires: null }
+```
+
 ### `getAttributeUint32(item, attrDefIndex)`
 
 Reads a uint32 value from a GC item's raw `attribute[]` array.
@@ -89,3 +128,18 @@ if (musicIndex) {
   console.log('Music kit ID:', musicIndex);
 }
 ```
+
+## Item data
+
+Item names, images, rarities and marketability come from
+[CSGO-API](https://github.com/ByMykel/CSGO-API) and ship with the package as
+`data/inventory.json` — no network calls at runtime.
+
+That file is refreshed daily by a scheduled workflow. When the upstream data
+changes, a new **patch** release is published, so a `^0.4.0` dependency picks up
+new skins, cases and stickers automatically. Each release lists what was added or
+removed.
+
+## License
+
+[MIT](LICENSE)

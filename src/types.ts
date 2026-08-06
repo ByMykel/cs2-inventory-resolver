@@ -59,7 +59,10 @@ export interface GcItemInput {
   def_index: number;
   /** The paint/skin index. Non-zero for weapon skins. */
   paint_index?: number;
-  /** The item quality (3 = ★ knife/glove, 9 = StatTrak, 12 = Souvenir). */
+  /**
+   * The item quality. Only `3` (★ knife/glove) affects resolution; StatTrak™ and
+   * Souvenir are detected from attributes 80 and 140, not from this field.
+   */
   quality?: number;
   /** The paint wear float (0.0–1.0). Present only for skins. */
   paint_wear?: number;
