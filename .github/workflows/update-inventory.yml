@@ -17,7 +17,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Fetch upstream inventory.json
-        run: curl -sSfL "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/inventory.json" | jq -c . > data/inventory.json
+        run: |
+          set -euo pipefail
+          curl -sSfL --retry 3 --retry-delay 5 \
+            "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/inventory.json" \
+            -o "$RUNNER_TEMP/inventory.raw.json"
+          jq -e '
+            type == "object"
+            and ((["skins","crates","stickers","keychains","agents"] - keys) == [])
+            and (.skins | length) > 0
+          ' "$RUNNER_TEMP/inventory.raw.json" > /dev/null
+          jq -c . "$RUNNER_TEMP/inventory.raw.json" > "$RUNNER_TEMP/inventory.min.json"
+          mv "$RUNNER_TEMP/inventory.min.json" data/inventory.json
 
       - name: Check for changes
         id: diff
