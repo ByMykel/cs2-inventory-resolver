@@ -4,6 +4,9 @@ import {getData} from './data-loader.js';
 /** The `trade_protected_escrow_date` attribute def_index. */
 const TRADE_PROTECTED_ESCROW_DATE = 312;
 
+/** The item def_index shared by every sticker slab. */
+const STICKER_SLAB_DEF_INDEX = 1355;
+
 /**
  * Derive the trade state of an item instance from attribute 312
  * (`trade_protected_escrow_date`).
@@ -105,16 +108,17 @@ function makeResult(
  * 1. Skins (by `def_index` + `paint_index`)
  * 2. Music kits (by attribute 166)
  * 3. Highlights / souvenir charms (by attribute 314)
- * 4. Keychains (by attribute 299)
- * 5. Graffiti (by `stickers[0].sticker_id` + attribute 233)
- * 6. Keys (by `def_index`)
- * 7. Crates / cases (by `def_index`)
- * 8. Collectibles (by `def_index`)
- * 9. Agents (by `def_index`)
- * 10. Tools (by `def_index`)
- * 11. Patches (by `stickers[0].sticker_id`)
- * 12. Stickers (by `stickers[0].sticker_id`)
- * 13. Sticker slabs — TODO: add sticker_slabs resolution
+ * 4. Sticker slabs (by attribute 321)
+ * 5. Keychains (by attribute 299)
+ * 6. Graffiti (by `stickers[0].sticker_id` + attribute 233)
+ * 7. Keys (by `def_index`)
+ * 8. Crates / cases (by `def_index`)
+ * 9. Collectibles (by `def_index`)
+ * 10. Agents (by `def_index`)
+ * 11. Tools (by `def_index`)
+ * 12. Sticker slabs (by `stickers[0].sticker_id`, only for `def_index` 1355)
+ * 13. Patches (by `stickers[0].sticker_id`)
+ * 14. Stickers (by `stickers[0].sticker_id`)
  *
  * @param gcItem - The raw GC item to resolve.
  * @returns The resolved item data, or `null` if the item could not be identified.
@@ -133,6 +137,7 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
   const graffitiTint = getAttributeUint32(gcItem, 233);
   const highlightIndex = getAttributeUint32(gcItem, 314);
   const keychainIndex = getAttributeUint32(gcItem, 299);
+  const stickerSlabIndex = getAttributeUint32(gcItem, 321);
 
   // 1. Skins: def_index + paint_index
   if (gcItem.paint_index && gcItem.paint_index > 0) {
@@ -155,13 +160,23 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
     if (highlight) return makeResult(highlight, gcItem, 'highlight');
   }
 
-  // 4. Keychains (charms): keychain_index (attribute 299)
+  // 4. Sticker slabs: sticker_slab_index (attribute 321)
+  //
+  // Checked before keychains: slabs also carry attribute 299 (a constant slab
+  // marker, not a keychain id), so leaving keychains first would let a slab
+  // resolve as the wrong charm.
+  if (stickerSlabIndex && stickerSlabIndex > 0) {
+    const slab = data.sticker_slabs[String(stickerSlabIndex)];
+    if (slab) return makeResult(slab, gcItem, 'sticker_slab');
+  }
+
+  // 5. Keychains (charms): keychain_index (attribute 299)
   if (keychainIndex && keychainIndex > 0) {
     const keychain = data.keychains[String(keychainIndex)];
     if (keychain) return makeResult(keychain, gcItem, 'keychain');
   }
 
-  // 5. Graffiti: stickers[0].sticker_id + graffiti_tint (attribute 233)
+  // 6. Graffiti: stickers[0].sticker_id + graffiti_tint (attribute 233)
   if (graffitiTint !== undefined && gcItem.stickers?.length) {
     const stickerId = gcItem.stickers[0].sticker_id;
     if (stickerId) {
@@ -174,38 +189,43 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
     }
   }
 
-  // 6. Keys
+  // 7. Keys
   const key = data.keys[defIdx];
   if (key) return makeResult(key, gcItem, 'key');
 
-  // 7. Crates / cases
+  // 8. Crates / cases
   const crate = data.crates[defIdx];
   if (crate) return makeResult(crate, gcItem, 'crate');
 
-  // 8. Collectibles (coins, pins, etc.)
+  // 9. Collectibles (coins, pins, etc.)
   const collectible = data.collectibles[defIdx];
   if (collectible) return makeResult(collectible, gcItem, 'collectible');
 
-  // 9. Agents (characters)
+  // 10. Agents (characters)
   const agent = data.agents[defIdx];
   if (agent) return makeResult(agent, gcItem, 'agent');
 
-  // 10. Tools (Name Tag, Storage Unit, etc.)
+  // 11. Tools (Name Tag, Storage Unit, etc.)
   const tool = data.tools[defIdx];
   if (tool) return makeResult(tool, gcItem, 'tool');
 
-  // 11. Patches: use stickers[0].sticker_id (checked before stickers)
   if (gcItem.stickers?.length) {
     const stickerId = gcItem.stickers[0].sticker_id;
     if (stickerId) {
+      // 12. Sticker slabs: slabs share their id with the applied sticker of the
+      // same design, so only def_index 1355 may resolve to a slab.
+      if (gcItem.def_index === STICKER_SLAB_DEF_INDEX) {
+        const slab = data.sticker_slabs[String(stickerId)];
+        if (slab) return makeResult(slab, gcItem, 'sticker_slab');
+      }
+
+      // 13. Patches (checked before stickers)
       const patch = data.patches[String(stickerId)];
       if (patch) return makeResult(patch, gcItem, 'patch');
 
-      // 12. Stickers
+      // 14. Stickers
       const sticker = data.stickers[String(stickerId)];
       if (sticker) return makeResult(sticker, gcItem, 'sticker');
-
-      // TODO: add sticker_slabs resolution (separate entity from stickers)
     }
   }
 

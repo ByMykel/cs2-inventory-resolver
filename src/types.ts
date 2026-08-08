@@ -11,7 +11,8 @@ export type ItemEntity =
   | 'agent'
   | 'tool'
   | 'patch'
-  | 'sticker';
+  | 'sticker'
+  | 'sticker_slab';
 
 /**
  * Current trade state of a specific item instance, derived from attribute 312
@@ -72,7 +73,8 @@ export interface GcItemInput {
    * Raw attribute array from the GC message.
    *
    * Used to extract `music_index` (def_index 166), `graffiti_tint` (def_index 233),
-   * `keychain_index` (def_index 299), `highlight_index` (def_index 314), and the
+   * `keychain_index` (def_index 299), `highlight_index` (def_index 314),
+   * `sticker_slab_index` (def_index 321), and the
    * `trade_protected_escrow_date` (def_index 312) via {@link getAttributeUint32}.
    */
   attribute?: {def_index: number; value_bytes?: Buffer}[];

@@ -273,7 +273,34 @@ describe('resolveItem', () => {
     expect(typeof result!.marketable).toBe('boolean');
   });
 
-  // 14. Non-skin name is unchanged
+  // 14. Sticker slab
+  it('resolves a sticker slab by attribute 321', () => {
+    const slabId = firstKey(data.sticker_slabs);
+    const result = resolveItem({def_index: 1355, attribute: [makeAttr(321, slabId)]});
+    expect(result).not.toBeNull();
+    expect(result!.entity).toBe('sticker_slab');
+    expect(result!.name).toBe(data.sticker_slabs[String(slabId)].name);
+    expect(typeof result!.marketable).toBe('boolean');
+  });
+
+  // 14b. Sticker slab — real GC item (Sticker Slab | rain | Rio 2022)
+  it('resolves a real sticker slab GC item', () => {
+    const result = resolveItem({
+      def_index: 1355,
+      quality: 8,
+      attribute: [
+        makeAttr(299, 37),
+        makeAttr(321, 6110),
+        makeAttr(75, 1786777200),
+      ],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.entity).toBe('sticker_slab');
+    expect(result!.name).toBe('Sticker Slab | rain | Rio 2022');
+    expect(result!.image).toBe(data.sticker_slabs['6110'].image);
+  });
+
+  // 15. Non-skin name is unchanged
   it('non-skin entities return name unchanged', () => {
     const crateId = firstKey(data.crates);
     const result = resolveItem({def_index: crateId});
@@ -281,7 +308,7 @@ describe('resolveItem', () => {
     expect(result!.name).toBe(data.crates[String(crateId)].name);
   });
 
-  // 15. Unknown item → null
+  // 16. Unknown item → null
   it('returns null for an unknown def_index', () => {
     expect(resolveItem({def_index: 999999})).toBeNull();
   });
@@ -309,6 +336,24 @@ describe('resolveItem — priority', () => {
     expect(result!.entity).toBe('key');
   });
 
+  it('sticker_id 6110 is a slab at def_index 1355 and a sticker at 1209', () => {
+    const slab = resolveItem({def_index: 1355, stickers: [{sticker_id: 6110}]});
+    expect(slab!.entity).toBe('sticker_slab');
+    expect(slab!.name).toBe('Sticker Slab | rain | Rio 2022');
+
+    const sticker = resolveItem({def_index: 1209, stickers: [{sticker_id: 6110}]});
+    expect(sticker!.entity).toBe('sticker');
+    expect(sticker!.name).toBe('Sticker | rain | Rio 2022');
+  });
+
+  it('sticker slab attribute 321 takes priority over keychain attribute 299', () => {
+    const result = resolveItem({
+      def_index: 1355,
+      attribute: [makeAttr(299, firstKey(data.keychains)), makeAttr(321, 6110)],
+    });
+    expect(result!.entity).toBe('sticker_slab');
+  });
+
   it('patch takes priority over sticker when sticker_id matches both', () => {
     const patchKeys = Object.keys(data.patches);
     const overlapping = patchKeys.find(k => data.stickers[k]);
@@ -328,6 +373,46 @@ describe('resolveItem — edge cases', () => {
     const result = resolveItem({def_index: crateId, paint_index: 0});
     expect(result).not.toBeNull();
     expect(result!.entity).toBe('crate');
+  });
+
+  it('unknown sticker slab id falls through to null', () => {
+    const result = resolveItem({def_index: 1355, attribute: [makeAttr(321, 999999)]});
+    expect(result).toBeNull();
+  });
+
+  it('sticker slab id of 0 is treated as absent', () => {
+    const result = resolveItem({def_index: 1355, attribute: [makeAttr(321, 0)]});
+    expect(result).toBeNull();
+  });
+
+  it('def_index 1355 with an unknown sticker_id resolves to null', () => {
+    const result = resolveItem({def_index: 1355, stickers: [{sticker_id: 999999}]});
+    expect(result).toBeNull();
+  });
+
+  it('sticker_id of 0 is treated as absent', () => {
+    const result = resolveItem({def_index: 1355, stickers: [{sticker_id: 0}]});
+    expect(result).toBeNull();
+  });
+
+  it('resolves trade status for a sticker slab', () => {
+    const result = resolveItem({
+      def_index: 1355,
+      attribute: [makeAttr(321, 6110), makeAttr(312, 0)],
+    });
+    expect(result!.entity).toBe('sticker_slab');
+    expect(result!.status).toBe('market_listed');
+  });
+
+  it('StatTrak takes priority over Souvenir when both attributes are present', () => {
+    const result = resolveItem({
+      def_index: 7,
+      paint_index: 282,
+      paint_wear: 0.3,
+      attribute: [makeAttr(80, 1), makeAttr(140, 1)],
+    });
+    expect(result!.name).toMatch(/^StatTrak™ /);
+    expect(result!.name).not.toContain('Souvenir');
   });
 
   it('empty stickers array does not crash', () => {
