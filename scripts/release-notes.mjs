@@ -23,7 +23,8 @@ const SINGULAR = {
   patches: 'patch',
   keys: 'key',
   sticker_slabs: 'sticker slab',
-  tools: 'tool'
+  tools: 'tool',
+  pets: 'pet'
 };
 
 const MAX_LISTED = 15;
