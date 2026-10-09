@@ -7,6 +7,9 @@ const TRADE_PROTECTED_ESCROW_DATE = 312;
 /** The item def_index shared by every sticker slab. */
 const STICKER_SLAB_DEF_INDEX = 1355;
 
+/** The item def_index shared by every pet. */
+const PET_DEF_INDEX = 4681;
+
 /**
  * Derive the trade state of an item instance from attribute 312
  * (`trade_protected_escrow_date`).
@@ -110,15 +113,16 @@ function makeResult(
  * 3. Highlights / souvenir charms (by attribute 314)
  * 4. Sticker slabs (by attribute 321)
  * 5. Keychains (by attribute 299)
- * 6. Graffiti (by `stickers[0].sticker_id` + attribute 233)
- * 7. Keys (by `def_index`)
- * 8. Crates / cases (by `def_index`)
- * 9. Collectibles (by `def_index`)
- * 10. Agents (by `def_index`)
- * 11. Tools (by `def_index`)
- * 12. Sticker slabs (by `stickers[0].sticker_id`, only for `def_index` 1355)
- * 13. Patches (by `stickers[0].sticker_id`)
- * 14. Stickers (by `stickers[0].sticker_id`)
+ * 6. Pets (by attribute 296 + `style`, only for `def_index` 4681)
+ * 7. Graffiti (by `stickers[0].sticker_id` + attribute 233)
+ * 8. Keys (by `def_index`)
+ * 9. Crates / cases (by `def_index`)
+ * 10. Collectibles (by `def_index`)
+ * 11. Agents (by `def_index`)
+ * 12. Tools (by `def_index`)
+ * 13. Sticker slabs (by `stickers[0].sticker_id`, only for `def_index` 1355)
+ * 14. Patches (by `stickers[0].sticker_id`)
+ * 15. Stickers (by `stickers[0].sticker_id`)
  *
  * @param gcItem - The raw GC item to resolve.
  * @returns The resolved item data, or `null` if the item could not be identified.
@@ -138,6 +142,7 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
   const highlightIndex = getAttributeUint32(gcItem, 314);
   const keychainIndex = getAttributeUint32(gcItem, 299);
   const stickerSlabIndex = getAttributeUint32(gcItem, 321);
+  const petId = getAttributeUint32(gcItem, 296);
 
   // 1. Skins: def_index + paint_index
   if (gcItem.paint_index && gcItem.paint_index > 0) {
@@ -176,7 +181,18 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
     if (keychain) return makeResult(keychain, gcItem, 'keychain');
   }
 
-  // 6. Graffiti: stickers[0].sticker_id + graffiti_tint (attribute 233)
+  // 6. Pets: pet_id (attribute 296) + style. Every pet shares def_index 4681;
+  // the pet id selects the entry in pet_definitions (egg, chick, chicken
+  // breed) and the style the breed color. Pets without styles (egg, chick)
+  // are keyed by pet id only.
+  if (gcItem.def_index === PET_DEF_INDEX && petId && petId > 0) {
+    const pet =
+      (gcItem.style != null && data.pets[`${petId}_${gcItem.style}`]) ||
+      data.pets[String(petId)];
+    if (pet) return makeResult(pet, gcItem, 'pet');
+  }
+
+  // 7. Graffiti: stickers[0].sticker_id + graffiti_tint (attribute 233)
   if (graffitiTint !== undefined && gcItem.stickers?.length) {
     const stickerId = gcItem.stickers[0].sticker_id;
     if (stickerId) {
@@ -189,41 +205,41 @@ export function resolveItem(gcItem: GcItemInput): ResolvedItemData | null {
     }
   }
 
-  // 7. Keys
+  // 8. Keys
   const key = data.keys[defIdx];
   if (key) return makeResult(key, gcItem, 'key');
 
-  // 8. Crates / cases
+  // 9. Crates / cases
   const crate = data.crates[defIdx];
   if (crate) return makeResult(crate, gcItem, 'crate');
 
-  // 9. Collectibles (coins, pins, etc.)
+  // 10. Collectibles (coins, pins, etc.)
   const collectible = data.collectibles[defIdx];
   if (collectible) return makeResult(collectible, gcItem, 'collectible');
 
-  // 10. Agents (characters)
+  // 11. Agents (characters)
   const agent = data.agents[defIdx];
   if (agent) return makeResult(agent, gcItem, 'agent');
 
-  // 11. Tools (Name Tag, Storage Unit, etc.)
+  // 12. Tools (Name Tag, Storage Unit, etc.)
   const tool = data.tools[defIdx];
   if (tool) return makeResult(tool, gcItem, 'tool');
 
   if (gcItem.stickers?.length) {
     const stickerId = gcItem.stickers[0].sticker_id;
     if (stickerId) {
-      // 12. Sticker slabs: slabs share their id with the applied sticker of the
+      // 13. Sticker slabs: slabs share their id with the applied sticker of the
       // same design, so only def_index 1355 may resolve to a slab.
       if (gcItem.def_index === STICKER_SLAB_DEF_INDEX) {
         const slab = data.sticker_slabs[String(stickerId)];
         if (slab) return makeResult(slab, gcItem, 'sticker_slab');
       }
 
-      // 13. Patches (checked before stickers)
+      // 14. Patches (checked before stickers)
       const patch = data.patches[String(stickerId)];
       if (patch) return makeResult(patch, gcItem, 'patch');
 
-      // 14. Stickers
+      // 15. Stickers
       const sticker = data.stickers[String(stickerId)];
       if (sticker) return makeResult(sticker, gcItem, 'sticker');
     }

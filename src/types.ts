@@ -4,6 +4,7 @@ export type ItemEntity =
   | 'music_kit'
   | 'highlight'
   | 'keychain'
+  | 'pet'
   | 'graffiti'
   | 'crate'
   | 'key'
@@ -67,13 +68,16 @@ export interface GcItemInput {
   quality?: number;
   /** The paint wear float (0.0–1.0). Present only for skins. */
   paint_wear?: number;
+  /** The item style. For pets it is the breed color (e.g. `9` = Polish Pink). */
+  style?: number | null;
   /** Sticker slots array. Also used for graffiti and sticker/patch items via `sticker_id`. */
   stickers?: {sticker_id?: number}[];
   /**
    * Raw attribute array from the GC message.
    *
    * Used to extract `music_index` (def_index 166), `graffiti_tint` (def_index 233),
-   * `keychain_index` (def_index 299), `highlight_index` (def_index 314),
+   * `keychain_index` (def_index 299), `pet_id` (def_index 296),
+   * `highlight_index` (def_index 314),
    * `sticker_slab_index` (def_index 321), and the
    * `trade_protected_escrow_date` (def_index 312) via {@link getAttributeUint32}.
    */
@@ -103,4 +107,5 @@ export interface InventoryData {
   keys: Record<string, ItemEntry>;
   sticker_slabs: Record<string, ItemEntry>;
   tools: Record<string, ItemEntry>;
+  pets: Record<string, ItemEntry>;
 }

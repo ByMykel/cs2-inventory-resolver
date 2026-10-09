@@ -66,7 +66,14 @@ resolveItem({ def_index: 1203 });
 //      status: "tradable",
 //      trade_hold_expires: null
 //    }
+
+// Pet (def_index 4681): pet id from attribute 296, breed color from `style`
+const pet = [{ def_index: 296, value_bytes: Buffer.from([5, 0, 0, 0]) }];
+resolveItem({ def_index: 4681, style: 9, attribute: pet });
+// => { name: "Pet Chicken | Polish (Pink)", entity: "pet", marketable: false, ... }
 ```
+
+Pets without styles (the egg and the chick) are resolved by their pet id only.
 
 Returns `null` if the item could not be identified.
 
@@ -78,6 +85,7 @@ Returns `null` if the item could not be identified.
 | `paint_index` | `number?` | Paint/skin index |
 | `quality` | `number?` | Item quality (`3` = ★ knife/glove) |
 | `paint_wear` | `number?` | Wear float (`0.0`–`1.0`) |
+| `style` | `number \| null?` | Item style (for pets, the breed color) |
 | `stickers` | `{sticker_id?: number}[]?` | Sticker slots |
 | `attribute` | `{def_index: number; value_bytes?: Buffer}[]?` | Raw attribute array |
 

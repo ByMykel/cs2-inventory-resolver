@@ -174,6 +174,42 @@ describe('resolveItem', () => {
     expect(typeof result!.marketable).toBe('boolean');
   });
 
+  // Pet
+  it('resolves a pet without style by attribute 296 on def_index 4681', () => {
+    const result = resolveItem({
+      def_index: 4681,
+      quality: 4,
+      style: null,
+      attribute: [makeAttr(296, 2), makeAttr(313, 57173217)],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.entity).toBe('pet');
+    expect(result!.name).toBe(data.pets['2'].name);
+    expect(result!.marketable).toBe(false);
+  });
+
+  it('resolves a chicken by attribute 296 and its style', () => {
+    const result = resolveItem({
+      def_index: 4681,
+      style: 9,
+      attribute: [makeAttr(296, 5), makeAttr(268, 3)],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.entity).toBe('pet');
+    expect(result!.name).toBe(data.pets['5_9'].name);
+    expect(result!.image).toBe(data.pets['5_9'].image);
+  });
+
+  it('does not resolve a chicken with an unknown style', () => {
+    const result = resolveItem({def_index: 4681, style: 99, attribute: [makeAttr(296, 5)]});
+    expect(result).toBeNull();
+  });
+
+  it('ignores attribute 296 on items that are not pets', () => {
+    const result = resolveItem({def_index: 4000, attribute: [makeAttr(296, 2)]});
+    expect(result).toBeNull();
+  });
+
   // 5. Graffiti (tinted)
   it('resolves a tinted graffiti by sticker_id + attribute 233', () => {
     const tintedKey = Object.keys(data.graffiti).find(k => k.includes('_'))!;
