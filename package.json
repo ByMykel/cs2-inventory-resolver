@@ -14,6 +14,10 @@
     "resolver",
     "valve"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ByMykel/cs2-inventory-resolver.git"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
